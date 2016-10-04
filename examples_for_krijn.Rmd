@@ -1,0 +1,95 @@
+---
+title: "Examples for Krijn"
+author: "Joe Brew"
+date: "October 4, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.height = 6)
+library(scatterplot3d)
+library(dplyr)
+library(RColorBrewer)
+```
+
+Krijn, I've addressed some of your points. Specifically, I'm having trouble understanding Part B, number 3: "Select 'from' and 'to' values (e.g. 0,4 to 0,75)."
+
+What do these values refer to? X (human blood index), Y (place of biting), Z (time), or something else? 
+
+I cannot draw a lines onto the chart without a bit more clarification on this...
+
+
+
+# Part A
+
+We just want to have a 3D box (image) with:
+1) x-axis: Human Blood Index (values from 0 to 1)
+2) y-axis: Place of biting (values from 0 to 1)
+3) z-axis: time of biting from 12pm to 12pm (so starting in the afternoon)
+
+```{r}
+# Create a dataframe of random points to plot
+x <- sample(seq(0, 1, length = 10000), 100)
+y <- sample(seq(0, 1, length = 10000), 100)
+z <- seq(0, 24, length = 100)
+df <- data.frame(x, y, z)
+scatterplot3d(x = df$x,
+              y = df$y,
+              z = df$z,
+              xlab = 'Human blood index',
+              ylab = 'Place of biting',
+              zlab = 'Hours after 12:00',
+              pch = 01,
+              color = adjustcolor('darkgreen', alpha.f = 0.8),
+              main = 'Part A chart')
+```
+
+# Part B
+
+For each item (whether it a mosquito, or a trap, etc), we would like to:
+1) Give it a name to appear in the legend
+2) Give it a unique color
+3) Choose a shape (square or ball, which could be oval)
+And select 'from' and 'to' values (e.g. 0,4 to 0,75) for
+4) Human Blood Index (values from 0 to 1)
+5) Place of biting (values from 0 to 1)
+6)Time of biting from 12pm to 12pm (so starting in the afternoon)
+
+```{r}
+# Make our dataframe smaller (only 10 points)
+df <- df[sample(1:100, 10),]
+
+# Add more information to our dataframe
+df$name <- c('Krijn',
+             'Joe',
+             'Lucia',
+             'Eusebio',
+             'Bea',
+             'Maxi',
+             'Sergi',
+             'Elisa',
+             'Laia',
+             'Inacio')
+df$color <- 
+  colorRampPalette(brewer.pal(9, 'Spectral'))(nrow(df))
+df$shape <- sample(1:20, nrow(df))
+
+scatterplot3d(x = df$x,
+              y = df$y,
+              z = df$z,
+              xlab = 'Human blood index',
+              ylab = 'Place of biting',
+              zlab = 'Hours after 12:00',
+              cex.symbols = 2,
+              pch = df$shape,
+              color = adjustcolor(df$color, alpha.f = 0.99),
+              main = 'Part B chart')
+legend('topleft',
+       pch = df$shape,
+       col = df$color,
+       legend = df$name)
+```
+
+# Part C
+
+Repeat part B to show multiple items in the same graph.
