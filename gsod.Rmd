@@ -1,0 +1,144 @@
+---
+title: "GSOD data"
+author: "Krijn and Joe"
+date: "April 3, 2018"
+fig_height: 2.6
+fig_width: 4
+output:
+  html_document:
+    pandoc_args: [
+      "+RTS", "-K16000m",
+      "-RTS"
+    ]
+    toc: true
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    theme: yeti
+---
+
+```{r setup, include=FALSE}
+# Basic knitr options
+knitr::opts_chunk$set(comment = NA, 
+               echo = FALSE, 
+               warning = FALSE, 
+               message = FALSE, 
+               error = TRUE, 
+               cache = FALSE)
+```
+
+```{r}
+library(gsod)
+library(dplyr)
+```
+
+## 1) Which station reports which mean (average of hourly samples vs. midpoint of maximum and minimum)?
+
+The gsod package (https://github.com/databrew/gsod#gsod-tools-for-using-noaa-global-surface-summary-of-the-day-data) - which I wrote and maintain - is a bit too simple for what you're trying to do. The "sod" part of "gsod" stands for "summary of the day". In other words, all the data is at the daily level (and there is nothing more granular than that). 
+
+That said, we can reverse-engineer the values a bit. For example, gsod offers an "average" temperature, a "max", and a "min". For 2017, for all 12,835 weather stations, 0% of them report the "average" temperature as the mid-point between the max and min more than 3% of the time. In other words, it's almost certain that they are averaging hourly temperatures (or something less regular, more/less granular, etc.) and calculating the average that way.
+
+```{r}
+gsod2017 <- gsod::gsod2017
+out <- gsod2017 %>%
+  filter(!is.na(lat)) %>%
+  mutate(temp_midpoint = (max - min) / 2) %>%
+  group_by(stnid) %>%
+  summarise(midpoints = length(which(temp == temp_midpoint)),
+            observations = n(),
+            lat = dplyr::first(lat),
+            lon = dplyr::first(lon),
+            avg_minus_midpoint = mean(temp - temp_midpoint, na.rm = TRUE)) %>%
+  mutate(midpoint_percentage = midpoints / observations * 100)
+```
+
+
+
+## 2) Visualize differences between the two across lat/long and across season (or year), as we noticed that differences can be quite significant.
+
+Here you go. The below map shows the difference between the reported "average" and the midpoint method (the former minus the latter) for each station. It displays the _average_ of this difference for the entirety of 2017.
+
+```{r}
+library(rworldmap)
+
+library(ggplot2)
+world <- map_data(map="world")
+
+ggplot() + 
+  geom_map(data=world, 
+           map=world,
+           aes(map_id=region, x=long, y=lat),
+           fill = 'black',
+           alpha = 0.6) +
+  geom_point(data = out,
+             aes(x = lon,
+                 y = lat,
+                 color = avg_minus_midpoint),
+             alpha = 0.6,
+             size = 0.05) +
+  scale_color_continuous(na.value = NA,
+                         name = 'Avg. diff. (sampled minus midpoint)',
+                         low = 'yellow',
+                         high = 'blue') +
+  labs(x = 'Longitude',
+       y = 'Latitude') +
+  theme(legend.position = 'bottom') +
+  databrew::theme_databrew()
+```
+
+The above map is a bit hard to use, since it's static, and there are more than 12,000 points to look at. It might be better to use an interactive map, so that we can zoom in and explore (each dot is a weather station, clicking on it shows the details):
+
+```{r}
+library(leaflet)
+pal <- colorNumeric(palette = RColorBrewer::brewer.pal(name = 'Spectral', n = 9),
+                    domain = out$avg_minus_midpoint,
+                    n = 9)
+leaflet(data = out) %>%
+  addProviderTiles('Stamen.Toner') %>%
+  addCircles(data = out,
+             lng = out$lon,
+             lat = out$lat,
+             color = ~pal(out$avg_minus_midpoint),
+             popup = mapview::popupTable(out)) %>%
+  addLegend("bottomright", pal = pal, values = out$avg_minus_midpoint,
+    title = "Difference",
+    opacity = 1,
+    na.label = ''
+  )
+```
+
+## 3) Visualize changes between mean based on hourly data, and that based on Tmin and Tmax, from same stations (to highlight potential errors one could make in disease models).
+
+I've created a simple function which does this for any station (or any combination of stations). Below is the code and an example output for four stations.
+
+```{r, echo = TRUE}
+visualizer <- function(station_ids = c("010010-99999", "010014-99999", "010020-99999", "010030-99999"),
+                       data = gsod2017){
+  x <- gsod2017 %>%
+    filter(stnid %in% station_ids) %>%
+    filter(!is.na(lat)) %>%
+  mutate(temp_midpoint = (max - min) / 2) %>%
+  group_by(stnid, date) %>%
+  summarise(midpoints = length(which(temp == temp_midpoint)),
+            observations = n(),
+            lat = dplyr::first(lat),
+            lon = dplyr::first(lon),
+            avg_minus_midpoint = mean(temp - temp_midpoint, na.rm = TRUE)) %>%
+  mutate(midpoint_percentage = midpoints / observations * 100)
+  
+  ggplot(data = x,
+         aes(x = date,
+             y = avg_minus_midpoint)) +
+    geom_line() +
+    geom_hline(yintercept = 0,
+               lty = 2,
+               alpha = 0.8,
+               color = 'darkred') +
+    facet_wrap(~stnid) +
+    labs(x = 'Date',
+         y = 'Average minus midpoint') +
+    databrew::theme_databrew()
+  
+}
+visualizer()
+```
